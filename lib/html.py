@@ -47,4 +47,12 @@ class HTMLTableParser(HTMLParser):
         #self.out['steps'].append( ('data',data) )
         if self.intd:
             self.innerText += data 
+    
+    def dump(tables):
+        keys = sorted( map(lambda n: int(n[5:]),
+            filter(lambda o: 'table' == o[0:5], tables.keys()) ) )
+        for k in keys:
+            print('Table ',k)
+            print(tables['table'+str(k)])
+
 
