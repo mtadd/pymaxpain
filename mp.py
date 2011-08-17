@@ -1,75 +1,62 @@
 import urllib.request
-from html.parser import HTMLParser
+from lib.html import HTMLTableParser
+def fmt_price(s):
+    try:
+        return float(s.replace(",",""))
+    except:
+        return 0.0
 
-class YahooOptionsParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self,strict=False)
-        self.cTable = 0
-        self.intable = False        
-        self.out = {}
-        self.inrow = False
-        self.intd = False
-        self.data = ''
-        self.tkey = ''
-        self.out['self'] = self
-        self.out['data'] = ''
-        self.out['d'] = ''
-        self.out['tags'] = set() 
-        self.out['steps'] = []
-        
-    def handle_starttag(self,tag,attrs):
-        self.out['steps'].append( ('start',tag,attrs) )
-        tag = tag.lower()
-        self.out['tags'].add(tag)
-        if tag == 'table':
-            self.cTable = self.cTable + 1
-            self.intable = True
-            self.tkey = tag + str(self.cTable)
-            self.out[self.tkey] = list()
-        if tag == 'tr' or tag == 'th':
-            self.inrow = True
-            self.out[self.tkey].append(list())
-        if tag == 'td':
-            self.intd = True
-            self.data = ''
+def fmt_int(s):
+    return int(s.replace(",",""))
 
-    def handle_startendtag(self,tag,attrs):
-        self.out['steps'].append( ('startend',tag,attrs) )
+OPTFMT = {'symbol': str, 'chg': None, 'vol': fmt_int, 'open int': fmt_int}
+def parse_strike_table(tbl):
+    out = {}
+    for i in range(len(tbl[0])):
+        key = tbl[0][i].lower()
+        fmt = fmt_price 
+        if key not in OPTFMT or OPTFMT[key]:
+            if key in OPTFMT:
+                fmt = OPTFMT[key]
+            out[key] = list()
+            for j in range(1,len(tbl)):
+                out[key].append(fmt(tbl[j][i]))
+    return out
 
-    def handle_endtag(self,tag):
-        self.out['steps'].append( ('end',tag) )
-        tag = tag.lower()
-        if tag == 'table':
-            self.intable = False
-        if tag == 'tr' or tag == 'th':
-            if self.intable:
-                self.inrow = False
-        if tag == 'td':
-            #if self.inrow:
-            self.out[self.tkey][-1].append(self.data)
-            self.intd = False
-
-    def handle_data(self,data):
-        self.out['steps'].append( ('data',data) )
-#        self.out['d'] += data
-        if self.intd:
-            self.out['data'] += data
-            self.data += data
-
-def get_options(symbol,mm,yy):
-    url = 'http://finance.yahoo.com/q/os?s=' + symbol + '&m=' + yy + '-' + mm
-    print('url ',url)
-    http = urllib.request.urlopen(url)
-    html = http.read().decode('utf-8')
-#    print('html len ',len(html))
-    print(html)
-    parser = YahooOptionsParser()
+def parse_options(html):
+    out = {}
+    parser = HTMLTableParser()
     parser.feed(html)
     parser.close()
-    parser.out['html'] = html
-    return parser.out
+    p = parser.out
+    #out['tables'] = p
+    out['desc'] = p['table4'][0][0]
+    last = p['table4'][0][1]
+    p1 = 2 + last.index(':',5)
+    p2 = last.index(' ',p1)
+    out['last'] = float(last[p1:p2])
+    out['expire'] = p['table9'][0][1][16:]
+    out['calls'] = parse_strike_table(p['table11'])
+    out['puts'] = parse_strike_table(p['table15'])
+    return out
+
+def get_options(symbol,mm,yy):
+    url = 'http://finance.yahoo.com/q/op?s={0}&m={1}-{2:02d}'
+    url = url.format(symbol,yy,mm)
+    http = urllib.request.urlopen(url)
+    html = http.read().decode('utf-8')
+    out = parse_options(html)
+    out['symbol'] = symbol
+    return out
 
 def do(sym):
-    return get_options(sym,'2011','08')
+    return get_options(sym,9,2011)
     
+def dump(tables):
+    keys = sorted(map(lambda n: int(n[5:]),filter(lambda o: 'table' == o[0:5],
+        tables.keys())))
+    for k in keys:
+        print('Table ',k)
+        print(tables['table'+str(k)])
+
 r = do('dd')
