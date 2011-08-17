@@ -1,4 +1,4 @@
-from html.parser import HTMLParser
+from lib.parser import HTMLParser
 
 class HTMLTableParser(HTMLParser):
     def __init__(self):
@@ -48,11 +48,21 @@ class HTMLTableParser(HTMLParser):
         if self.intd:
             self.innerText += data 
     
-    def dump(tables):
+    def dump(self,tables=None):
+        if tables == None:
+            tables = self.out
         keys = sorted( map(lambda n: int(n[5:]),
             filter(lambda o: 'table' == o[0:5], tables.keys()) ) )
         for k in keys:
             print('Table ',k)
             print(tables['table'+str(k)])
 
-
+if __name__ == '__main__':
+    import urllib.request
+    http = urllib.request.urlopen('http://www.google.com/')
+    html = http.read().decode('utf-8')
+    parser = HTMLTableParser()
+    parser.feed(html)
+    parser.close()
+    parser.dump(parser.out)
+    

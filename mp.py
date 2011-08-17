@@ -1,5 +1,6 @@
 import urllib.request
 from lib.html import HTMLTableParser
+
 def fmt_price(s):
     try:
         return float(s.replace(",",""))
