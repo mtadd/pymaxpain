@@ -102,12 +102,12 @@ class YahooOptions():
         self._max_gain(out)
         return out
 
-    def dump(self,tables):
-        keys = sorted(map(lambda n: int(n[5:]),
-            filter(lambda o: 'table' == o[0:5], tables.keys())))
-        for k in keys:
-            print('Table ',k)
-            print(tables['table'+str(k)])
+def dump(self,tables):
+    keys = sorted(map(lambda n: int(n[5:]),
+        filter(lambda o: 'table' == o[0:5], tables.keys())))
+    for k in keys:
+        print('Table ',k)
+        print(tables['table'+str(k)])
 
 def do(sym):
     return YahooOptions().get(sym,9,2011)
