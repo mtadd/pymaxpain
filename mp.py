@@ -100,6 +100,9 @@ class YahooOptions():
     def get(self,symbol,mm,yyyy):
         """
         """
+        self.mm = mm
+        self.yyyy = yyyy
+        self.symbol = symbol
         url = 'http://finance.yahoo.com/q/op?s={0}&m={1}-{2:02d}'
         url = url.format(symbol,yyyy,mm)
         out = {}
@@ -116,30 +119,26 @@ class YahooOptions():
             out['max pain'] = None
 
         out['symbol'] = symbol 
+        self.out = out
         return out
 
+    @staticmethod
+    def _async_get_thread(self,symbol,mm,yyyy,limiter):
+        if limiter: 
+            limiter.acquire()
+        try:
+           self.out = self.get(symbol,mm,yyyy)
+           print('YahooOptions.async_get ',symbol,mm,yyyy)
+        finally:
+            if limiter: 
+                limiter.release()
+
     def async_get(self,symbol,mm,yyyy,limiter):
-        class Async(threading.Thread):
-            def __init__(self,yahoo,symbol,mm,yyyy,limiter):
-                threading.Thread.__init__(self)
-                self.limiter = limiter
-                self.yahoo = yahoo
-                self.symbol = symbol
-                self.mm = mm
-                self.yyyy = yyyy
-                self.out = {}
-
-            def run(self):
-                if self.limiter: self.limiter.acquire()
-                try:
-                    self.out = self.yahoo.get(self.symbol,self.mm,self.yyyy)
-                    print('YahooOptions.async_get ',symbol,mm,yyyy)
-                finally:
-                    if self.limiter: self.limiter.release()
-
-        o = Async(self,symbol,mm,yyyy,limiter)
-        o.start()
-        return o
+        self.thread = threading.Thread(
+                        target=self._async_get_thread,
+                        args=(self,symbol,mm,yyyy,limiter))
+        self.thread.start()
+        return self 
 
 def dumphtml(self,tables):
     keys = sorted(map(lambda n: int(n[5:]),
@@ -192,7 +191,7 @@ def do3(sym,months):
         xs.append(YahooOptions().async_get(sym,dm[0],dm[1],limiter))
 
     for x in xs:
-        x.join()
+        x.thread.join()
 
     print('\t'.join(["SYM","DATE","MP","VOL","PUTS/CALLS"]))
     for x in xs:
@@ -226,7 +225,7 @@ def do4(symbols="XLK,XLB,XLE,XLI,XLF,XHB,XLV,XLU,XLP,SPY",months=12):
         for date in dates:
             t = YahooOptions().async_get(sym,date[0],date[1],limiter)
             mps.append(t)
-            threads.append(t)
+            threads.append(t.thread)
         mptable.append(mps) 
 
     for t in threads:
