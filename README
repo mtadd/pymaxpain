@@ -1,0 +1,5 @@
+pymaxpain
+
+Stock option max pain calculator in Python 3.
+
+Utilizes Yahoo finance for stock option data.
