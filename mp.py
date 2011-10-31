@@ -1,29 +1,33 @@
-import numpy as np
-import urllib.request
-from lib.html import HTMLTableParser
-from datetime import date
+import numpy                           #matrix / linear algebra operations
+import urllib.request                  #http / network
+import sys
+from lib.html import HTMLTableParser   #see lib\html.py
+from datetime import date              #calendar arithmetic
+import threading
 
-def fmt_price(s):
-    try:
-        return float(s.replace(",",""))
-    except:
-        return 0.0
-
-def fmt_int(s):
-    return int(s.replace(",",""))
-
-OPTFMT = { 
-        'symbol': str, 
-        'chg': None, 
-        'vol': fmt_int, 
-        'open int': fmt_int
-        }
- 
 class YahooOptions():
+    """Library for getting stock options from Yahoo. 
+    """
     def __init__(self):
         pass
 
     def _parse_strike_table(self,tbl):
+        def fmt_price(s):
+            try:
+                return float(s.replace(",",""))
+            except:
+                return 0.0
+
+        def fmt_int(s):
+            return int(s.replace(",",""))
+
+        OPTFMT = { 
+                'symbol': str, 
+                'chg': None, 
+                'vol': fmt_int, 
+                'open int': fmt_int
+                }
+
         out = {}
         for i in range(len(tbl[0])):
             key = tbl[0][i].lower()
@@ -85,17 +89,19 @@ class YahooOptions():
         P = [sum(map(lambda n: n**p, prices[p1:p2])) for p in range(5)]
         bs = [sum([ v*(prices[i]**p)  for i,v in enumerate(totals) 
                         if p1 <= i < p2]) for p in range(3)] 
-        mA = np.matrix([P[0:3],P[1:4],P[2:5]]) 
-        mB = np.matrix([bs]).transpose()
+        mA = numpy.matrix([P[0:3],P[1:4],P[2:5]]) 
+        mB = numpy.matrix([bs]).transpose()
         C = list((mA.getI()*mB).getA1())
         # print('mmult',C)
         maxgain = -C[1]/(2*C[2])
         out['max pain'] = maxgain
         return out
 
-    def get(self,symbol,mm,yy):
+    def get(self,symbol,mm,yyyy):
+        """
+        """
         url = 'http://finance.yahoo.com/q/op?s={0}&m={1}-{2:02d}'
-        url = url.format(symbol,yy,mm)
+        url = url.format(symbol,yyyy,mm)
         out = {}
         try:
             http = urllib.request.urlopen(url)
@@ -103,11 +109,37 @@ class YahooOptions():
             out = self._parse_html(html)
             self._value_options(out)
             self._max_gain(out)
+        except KeyboardInterrupt:
+            raise 
         except:   
+            print('YahooOptions.get error ',sys.exc_info()[0])
             out['max pain'] = None
 
         out['symbol'] = symbol 
         return out
+
+    def async_get(self,symbol,mm,yyyy,limiter):
+        class Async(threading.Thread):
+            def __init__(self,yahoo,symbol,mm,yyyy,limiter):
+                threading.Thread.__init__(self)
+                self.limiter = limiter
+                self.yahoo = yahoo
+                self.symbol = symbol
+                self.mm = mm
+                self.yyyy = yyyy
+                self.out = {}
+
+            def run(self):
+                if self.limiter: self.limiter.acquire()
+                try:
+                    self.out = self.yahoo.get(self.symbol,self.mm,self.yyyy)
+                    print('YahooOptions.async_get ',symbol,mm,yyyy)
+                finally:
+                    if self.limiter: self.limiter.release()
+
+        o = Async(self,symbol,mm,yyyy,limiter)
+        o.start()
+        return o
 
 def dumphtml(self,tables):
     keys = sorted(map(lambda n: int(n[5:]),
@@ -153,65 +185,64 @@ def getDateRange(months):
 
 
 def do3(sym,months):
-    out = []
     sym = sym.upper()
+    limiter = threading.BoundedSemaphore(4)
+    xs = []
     for dm in getDateRange(months):
-        mm = dm[0]
-        yy = dm[1]
-        x = YahooOptions().get(sym,mm,yy)
-        mp = x['max pain']
-        mps = "N/A"
+        xs.append(YahooOptions().async_get(sym,dm[0],dm[1],limiter))
+
+    for x in xs:
+        x.join()
+
+    print('\t'.join(["SYM","DATE","MP","VOL","PUTS/CALLS"]))
+    for x in xs:
+        mm = x.mm 
+        yy = x.yyyy 
+        mp = x.out['max pain']
+        mps = ""
+        vols = ""
+        volr = ""
         volc = 1
         volp = -1
         if mp != None:
             mps = '${0:5.2f}'.format(mp)
-            volc = sum(x['calls']['open int'])
-            volp = sum(x['puts']['open int'])
+            volc = sum(x.out['calls']['open int'])
+            volp = sum(x.out['puts']['open int'])
+            vols = volc+volp
+            volr = '{0:5.2f}'.format(volp/volc)
+
         url = 'http://finance.yahoo.com/q/op?s={0}&m={1}-{2:02d}'
         print('\t'.join(map(str,[sym, '{0:02d}/{1}'.format(mm,yy),
-                        mps,
-                        volp+volc,
-                        '{0:5.2f}'.format(volp/volc)])))
-        if mp != None:
-            out.append( x['max pain'] )
-        else:
-            out.append( 0.0 )
-    return out
+                        mps, vols, volr])))
 
 def do4(symbols="XLK,XLB,XLE,XLI,XLF,XHB,XLV,XLU,XLP,SPY",months=12):
     syms = list(map(lambda s: s.strip(),symbols.split(",")))
     dates = getDateRange(months)
+    limiter = threading.BoundedSemaphore(4)
+    threads = []
     mptable = []
     for sym in syms:
-        mps = []
+        mps = [] 
         for date in dates:
-            x = YahooOptions().get(sym,date[0],date[1])
-            mp = x['max pain']
-            if mp == None:
-                mp = 0.0
-            print("- {0}\t{1}/{2}\t{3:2.2f}".format(sym,date[0],date[1],mp))
-            mps.append(mp)
-        mptable.append(mps)
+            t = YahooOptions().async_get(sym,date[0],date[1],limiter)
+            mps.append(t)
+            threads.append(t)
+        mptable.append(mps) 
+
+    for t in threads:
+        t.join()
+
+    for xsyms in mptable:
+        for x in xsyms:
+            x.mp = x.out['max pain']
+            if x.mp == None:
+                x.mp = 0.0
+
     print("\t","\t".join(map(lambda d: "{0}/{1}".format(d[0],d[1]),dates)))
     for i in range(len(syms)):
         print("\t".join([ syms[i].upper() ] +
-                        list(map(lambda mp: '{0:2.2f}'.format(mp), mptable[i]))))
+                        list(map(lambda x: '{0:2.2f}'.format(x.mp), mptable[i]))))
 
 def do5(symbols='vnq,t,nly,agnc,cb,cop,dvn,dd,f,fcx,hd,ews,line,nat,tbt,vz,wy,upl,hp,jjc',months=12):
-    syms = list(map(lambda s: s.strip(),symbols.split(",")))
-    dates = getDateRange(months)
-    mptable = []
-    for sym in syms:
-        mps = []
-        for date in dates:
-            x = YahooOptions().get(sym,date[0],date[1])
-            mp = x['max pain']
-            if mp == None:
-                mp = 0.0
-            print("- {0}\t{1}/{2}\t{3:2.2f}".format(sym,date[0],date[1],mp))
-            mps.append(mp)
-        mptable.append(mps)
-    print("\t","\t".join(map(lambda d: "{0}/{1}".format(d[0],d[1]),dates)))
-    for i in range(len(syms)):
-        print("\t".join([ syms[i].upper() ] +
-                        list(map(lambda mp: '{0:2.2f}'.format(mp), mptable[i]))))
+    do4(symbols,months)
+
