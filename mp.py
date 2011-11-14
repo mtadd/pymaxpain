@@ -224,7 +224,7 @@ class YahooOptions():
             raise 
         except:   
             print('YahooOptions.get error ',sys.exc_info()[0])
-            raise
+            #raise
 
         if type(symbol) != list:        
             out['symbol'] = symbol 
