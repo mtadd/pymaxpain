@@ -16,10 +16,19 @@ class Application(tk.Frame):
         self.right.pack(side=RIGHT,fill=BOTH,expand=YES)
 
         self.left = tk.Frame(self,bd=1,relief=GROOVE,bg="red")
-        self.left.pack(side=LEFT)
+        self.left.pack(side=LEFT,fill=BOTH,expand=YES)
 
-        self.vgrid = tk.Frame(self.left)
-        self.vgrid.grid()
+        self.grid_canvas = tk.Canvas(self.left,borderwidth=0,width=300,bg="cyan")
+
+        self.vgrid = tk.Frame(self.grid_canvas,bg="white")
+        self.vsb = tk.Scrollbar(self.left,orient="vertical",
+                            command=self.grid_canvas.yview)
+        self.grid_canvas.configure(yscrollcommand=self.vsb.set)
+        self.grid_canvas.pack(side=LEFT,fill=Y,expand=YES)
+        self.vsb.pack(side=LEFT,fill="y")
+        self.grid_canvas.create_window((1,1),window=self.vgrid,anchor="nw",
+                tags="self.vggrid")
+        self.vgrid.bind("<Configure>", self.OnVGridConfigure)
 
         self.message = tk.Message(self.bottom,width=500)
         self.message.pack(fill=BOTH,expand=YES)
@@ -71,6 +80,9 @@ class Application(tk.Frame):
             self.after(200,self.process_queue)
         else:
             self.root.destroy()
+
+    def OnVGridConfigure(self, event):
+        self.grid_canvas.configure(scrollregion=self.grid_canvas.bbox("all"))
 
     def draw_grid(self,mp):
         for o in self.vgrid.grid_slaves():
