@@ -130,7 +130,7 @@ class YahooOptions():
         else:
             url = "http://query.yahooapis.com/v1/public/yql?q=SELECT%20*%20FROM%20yahoo.finance.options%20WHERE%20symbol%3D'{0}'%20AND%20expiration%3D'{1}-{2:02d}'&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys"
             url = url.format(self.symbol,self.yyyy,self.mm)
-        print(url)
+        #print(url)
         http = urllib.request.urlopen(url)
         resp = http.read().decode('utf-8')
         return self._parse_json(json.loads(resp))
@@ -347,7 +347,7 @@ def do3a(sym='GOOG'):
     do3_dump(sym,xs)
 
 def do4(symbols="XLK,XLB,XLE,XLI,XLF,XHB,XLV,XLU,XLP,SPY",months=12):
-    syms = list(map(lambda s: s.strip(),symbols.split(",")))
+    syms = sorted(list(map(lambda s: s.strip(),symbols.split(","))))
     dates = getDateRange(months)
     limiter = threading.BoundedSemaphore(4)
     threads = []
@@ -375,7 +375,7 @@ def do4(symbols="XLK,XLB,XLE,XLI,XLF,XHB,XLV,XLU,XLP,SPY",months=12):
                         list(map(lambda x: '{0:2.2f}'.format(x.mp), mptable[i]))))
 
 def do4a(symbols="XLK,XLB,XLE,XLI,XLF,XHB,XLV,XLU,XLP,SPY",months=6):
-    syms = list(map(lambda s: s.strip(),symbols.split(",")))
+    syms = sorted(list(map(lambda s: s.strip(),symbols.split(","))))
     contracts = YahooOptions().get_contracts(syms)
     dtmap = {}
     for sym,sym_dates in contracts.items():

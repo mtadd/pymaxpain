@@ -2,18 +2,15 @@ import tkinter as tk
 from tkinter.constants import *
 from mp import *
 import queue
-
+import datetime
 
 class Application(tk.Frame):
-    def say_hi(self):
-        print("hi there, everyone!")
-
     def createWidgets(self):
         self.top = tk.Frame(self,bd=1,relief=GROOVE,bg="yellow")
         self.top.pack(side=TOP)
 
         self.bottom = tk.Frame(self,bd=1,relief=GROOVE,bg="blue")
-        self.bottom.pack(side=BOTTOM)
+        self.bottom.pack(side=BOTTOM,fill=BOTH,expand=YES)
 
         self.right = tk.Frame(self,bd=1,relief=GROOVE,bg="green")
         self.right.pack(side=RIGHT,fill=BOTH,expand=YES)
@@ -24,16 +21,16 @@ class Application(tk.Frame):
         self.vgrid = tk.Frame(self.left)
         self.vgrid.grid()
 
+        self.message = tk.Message(self.bottom,width=500)
+        self.message.pack(fill=BOTH,expand=YES)
 
         tk.Button(self.top,text="Add",fg="red", 
                     command=self.add_symbol).pack(side=LEFT)
 
-        self.hi_there = tk.Button(self.bottom,text="Hello",command=self.say_hi)
-        self.hi_there.pack(side=LEFT)
-
-        self.symbols = tk.StringVar(value="F")
-        self.mm = tk.IntVar(value=12)
-        self.yyyy = tk.IntVar(value=2011)
+        today = datetime.date.today()
+        self.symbols = tk.StringVar(value="")
+        self.mm = tk.IntVar(value=today.month)
+        self.yyyy = tk.IntVar(value=today.year)
 
         tk.Label(self.top,text="Symbols:").pack(side=LEFT)
         tk.Entry(self.top,textvariable=self.symbols,width=10).pack(side=LEFT)
@@ -68,6 +65,7 @@ class Application(tk.Frame):
                 print(mp)
                 self.draw_grid(mp)
                 self.draw_graph(mp)
+                self.draw_text(mp)
             self.update_idletasks()
         if self.running:
             self.after(200,self.process_queue)
@@ -94,13 +92,21 @@ class Application(tk.Frame):
                         bg=bg,fg=fg,relief='ridge',justify='right',width=12)
                 lbl.grid(column=j,row=i+1)
 
+    def draw_text(self,mp):
+        puts = sum(mp['puts']['open int'])
+        calls = sum(mp['calls']['open int'])
+        s = "Open Interest P/C Ratio: {0:5.2f}\t ({1} / {2})\n".format( 
+                float(puts)/calls, puts, calls)
+        s += "Minimum (MP): ${0:5.2f}\n".format(mp['max pain'])
+        self.message['text'] = s
+
     def draw_graph(self,mp):
         self.right.pack(side=RIGHT,fill=BOTH,expand=YES)
         self.graph.pack(fill=BOTH,expand=YES)
         ctx = self.graph
         width = ctx.winfo_width() 
         height = ctx.winfo_height() 
-        AXIS = 10
+        AXIS = 20
         self.graph.delete(ALL) 
         val = mp['value']
         x1 = val['prices'][0]
@@ -134,6 +140,9 @@ class Application(tk.Frame):
             out = YahooOptions().get(symbol,mm,yyyy)
             queue.put(out)
         sym = self.symbols.get().strip()
+        if len(sym) == 0:
+            self.message['text'] = "Enter a symbol"
+            return
         arg = (sym,self.mm.get(),self.yyyy.get(),self.queue)
         print(arg)
         t = threading.Thread(target=_get_max_pain_thread, args=arg)
